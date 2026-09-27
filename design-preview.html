@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hands-On Fitness — Calm Active preview</title>
+<style>
+:root{--bg:#FAF7F2;--ink:#1A1D21;--muted:#6B7280;--coral:#FF6B5B;--teal:#0E7C6B;--sage:#4CAF82;--amber:#FFB020;--card:#fff;--dark:#121417}
+*{box-sizing:border-box;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink)}
+header{padding:32px 24px;max-width:1100px;margin:auto}
+h1{margin:0;font-size:34px}h1 span{color:var(--coral)}
+.sub{color:var(--muted);margin-top:8px}
+.grid{max-width:1100px;margin:auto;padding:0 24px 48px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.card{background:var(--card);border-radius:24px;padding:20px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
+.swatches{display:flex;gap:10px;margin:16px 0}.sw{flex:1;border-radius:16px;padding:14px 10px;color:#fff;font-size:12px;font-weight:700}
+.phone{background:#111;color:#fff;border-radius:36px;padding:18px;min-height:480px;display:flex;flex-direction:column}
+.screen{background:#1c1f24;border-radius:24px;padding:18px;flex:1;display:flex;flex-direction:column;gap:12px}
+.ring{width:150px;height:150px;border-radius:50%;margin:8px auto;display:grid;place-items:center;background:conic-gradient(var(--coral) 65%,#333 0);font-size:44px;font-weight:800}
+.ring span{background:#1c1f24;border-radius:50%;width:118px;height:118px;display:grid;place-items:center}
+.btnrow{display:flex;gap:10px}.btn{flex:1;border-radius:16px;padding:16px;text-align:center;font-weight:800;background:#2a2e35}.btn.go{background:var(--coral)}
+.pill{display:inline-block;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700}
+.daystrip{display:flex;gap:8px}.day{flex:1;background:#2a2e35;border-radius:14px;padding:10px 4px;text-align:center;font-size:12px}.day.on{background:var(--teal)}
+.lightphone{background:var(--card);color:var(--ink);border-radius:36px;padding:18px;border:1px solid #eee;min-height:480px}
+.bar{height:10px;border-radius:99px;background:#eee;overflow:hidden}.bar i{display:block;height:100%;background:var(--sage)}
+.tag{font-size:12px;color:var(--muted)}
+h3{margin:6px 0 12px}
+</style>
+</head>
+<body>
+<header>
+<h1>Hands-On Fitness <span>· Calm Active</span></h1>
+<div class="sub">Soft Material 3 wellness style — warm off-white, coral (workout) + teal (yoga), amber streaks. Timer-first, 72px targets, dark player.</div>
+<div class="swatches">
+<div class="sw" style="background:#FAF7F2;color:#1A1D21;border:1px solid #eee">BG #FAF7F2</div>
+<div class="sw" style="background:#FF6B5B">Workout #FF6B5B</div>
+<div class="sw" style="background:#0E7C6B">Yoga #0E7C6B</div>
+<div class="sw" style="background:#FFB020">Streak #FFB020</div>
+<div class="sw" style="background:#121417">Player #121417</div>
+</div>
+</header>
+<div class="grid">
+<div class="card"><span class="pill" style="background:#FFE9E6;color:#B23A2E">ONBOARDING</span><h3>One question per screen</h3><div class="lightphone"><b>What's your goal?</b><div class="tag">Step 1 of 3</div><div style="display:grid;gap:10px;margin-top:12px"><div class="card" style="border:2px solid var(--coral)">💪 Strength</div><div class="card">🧘 Flexibility</div><div class="card">⚖️ Weight loss</div><div class="card">😌 Stress relief</div></div></div></div>
+<div class="card"><span class="pill" style="background:#E6F5EF;color:#0E7C6B">TODAY PLAN</span><h3>Workout + yoga mix</h3><div class="lightphone"><div class="tag">TUE · 20 MIN</div><div class="card" style="background:#1A1D21;color:#fff"><b>Today's mix</b><br>🔥 Full-body 10′ + 🧘 Evening stretch 10′</div><div class="tag">7-day strip</div><div class="daystrip" style="color:#fff"><div class="day on">M</div><div class="day on">T</div><div class="day" style="background:#eee;color:#333">W</div><div class="day" style="background:#eee;color:#333">T</div><div class="day" style="background:#eee;color:#333">F</div></div><div class="btnrow"><div class="btn go" style="color:#fff">Start ▶</div><div class="btn" style="background:#eee;color:#333">Swap</div></div></div></div>
+<div class="card"><span class="pill" style="background:#1A1D21;color:#fff">SESSION PLAYER · DARK</span><h3>Giant ring + 72px controls</h3><div class="phone"><div class="screen"><div class="tag" style="color:#aaa">BODYWEIGHT SQUATS · 2 OF 6</div><div class="ring"><span>0:42</span></div><div style="text-align:center;font-weight:800;letter-spacing:2px">3 · 2 · 1 · SWITCH</div><div class="btnrow"><div class="btn">⏸</div><div class="btn">⏭</div><div class="btn">↺</div></div><div class="btnrow"><div class="btn go">Finish ✓</div></div></div></div></div>
+<div class="card"><span class="pill" style="background:#FFF3D6;color:#8A5A00">WELLNESS + PROGRESS</span><h3>Streaks without guilt</h3><div class="lightphone"><div class="card">🔥 6-day streak <div class="bar"><i style="width:75%"></i></div><div class="tag">Rest days count</div></div><div class="card">💧 Water 750 / 2000 ml <div class="btnrow"><div class="btn" style="background:#E6F5EF;color:#0E7C6B">+250</div><div class="btn" style="background:#E6F5EF;color:#0E7C6B">+500</div></div></div><div class="card">😴 Sleep tip · 🧼 Hygiene tip</div></div></div>
+</div>
+</body>
+</html>
