@@ -117,4 +117,17 @@ Users engaging with wellness tips weekly
 * Is offline playback of workout/yoga videos required for v1?  
 * Should countdown timers support custom durations set by the user?
 
+**Note — Technical Choices (informative, not requirements)**
+
+Locked 2026-09-27. Source of truth: `docs/decisions.md`. Does not change §5 requirements.
+
+* App: Flutter (single codebase, iOS + Android)
+* Database: PostgreSQL 16 (local via Docker `hof-db`; prod: Neon serverless)
+* Auth: Better Auth via Node API (email + Google/Apple social, session/JWT)
+* File storage: Cloudflare R2 (video/thumbs/cues via API signed URLs, stream-only v1)
+* API: Node + Hono + Drizzle (`/app` → API → Postgres/R2)
+* Push: FCM/APNs (daily workout Must, hydration Should, wind-down Could)
+* Analytics: Firebase Analytics (+ PostHog for funnels) — §4 metrics
+* Local run: `docker compose up --build -d` → `localhost:5432` (db), `localhost:3000` (api)
+
 Hands-On Fitness · Product Requirements Document · Draft v1.0  

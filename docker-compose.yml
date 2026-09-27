@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hof-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hof
+      POSTGRES_PASSWORD: hof_dev_password
+      POSTGRES_DB: hands_on_fitness
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hof -d hands_on_fitness"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./api
+    container_name: hof-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://hof:hof_dev_password@db:5432/hands_on_fitness
+      PORT: 3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

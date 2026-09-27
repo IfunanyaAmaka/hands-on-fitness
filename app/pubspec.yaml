@@ -1,0 +1,12 @@
+name: hands_on_fitness
+description: Hands-On Fitness local app shell.
+publish_to: "none"
+version: 0.1.0
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+flutter:
+  uses-material-design: true
