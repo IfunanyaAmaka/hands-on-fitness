@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+*.env
+api/.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.freezed.dart
+*.g.dart
+
+# Docker volumes / local data
+pgdata/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
