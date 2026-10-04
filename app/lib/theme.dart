@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // Hands-On Fitness "Calm Active" theme — Material 3.
+// Type: Outfit (display/timer/headings) + Manrope (body).
 // See design-preview.html for visual reference.
 class HofColors {
   static const bgLight = Color(0xFFFAF7F2);
@@ -22,10 +24,11 @@ final hofLightTheme = ThemeData(
     secondary: HofColors.yoga,
     tertiary: HofColors.streak,
   ),
-  textTheme: const TextTheme(
-    displayLarge: TextStyle(fontSize: 80, fontWeight: FontWeight.w800, letterSpacing: -1),
-    titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-    bodyLarge: TextStyle(fontSize: 16, height: 1.5),
+  textTheme: TextTheme(
+    displayLarge: GoogleFonts.outfit(fontSize: 80, fontWeight: FontWeight.w800, letterSpacing: -1),
+    titleLarge: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700),
+    bodyLarge: GoogleFonts.manrope(fontSize: 16, height: 1.5),
+    labelLarge: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w700),
   ),
   cardTheme: CardThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
