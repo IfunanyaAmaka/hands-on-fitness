@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hands-On Fitness — Web Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FAF7F2;--ink:#1A1D21;--muted:#6B7280;--coral:#FF6B5B;--teal:#0E7C6B;--amber:#FFB020;--card:#fff}
+*{box-sizing:border-box;font-family:Manrope,Segoe UI,Arial,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink)}
+h1,h2,.timer{font-family:Outfit,Manrope,sans-serif}
+header{max-width:960px;margin:auto;padding:28px 20px 8px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:28px}h1 span{color:var(--coral)}
+.status{font-size:13px;color:var(--muted)}
+.status b{color:var(--teal)}
+nav{max-width:960px;margin:auto;padding:8px 20px;display:flex;gap:8px;flex-wrap:wrap}
+nav button{border:0;border-radius:999px;padding:10px 18px;font-weight:800;cursor:pointer;background:#eee}
+nav button.on{background:var(--ink);color:#fff}
+main{max-width:960px;margin:auto;padding:12px 20px 60px}
+.card{background:var(--card);border-radius:24px;padding:22px;box-shadow:0 6px 24px rgba(0,0,0,.06);margin-bottom:16px}
+.pill{display:inline-block;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:800}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:0;border-radius:16px;padding:16px 20px;font-weight:800;cursor:pointer;font-size:15px}
+.btn.go{background:var(--coral);color:#fff}.btn.alt{background:#eee}.btn.teal{background:var(--teal);color:#fff}
+.btn:disabled{opacity:.45;cursor:default}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.goal{border:2px solid #eee;border-radius:18px;padding:18px;cursor:pointer;font-weight:800;font-size:16px;background:#fff}
+.goal.on{border-color:var(--coral);background:#FFF3F1}
+.ring{width:190px;height:190px;border-radius:50%;margin:12px auto;display:grid;place-items:center;background:conic-gradient(var(--coral) 100%,#eee 0)}
+.ring span{background:#fff;border-radius:50%;width:150px;height:150px;display:grid;place-items:center;font-size:52px;font-weight:800}
+.timer{text-align:center}
+.cue{text-align:center;letter-spacing:3px;font-weight:800;color:var(--muted);margin:6px 0}
+.bar{height:12px;border-radius:99px;background:#eee;overflow:hidden}.bar i{display:block;height:100%;background:var(--amber)}
+.tag{font-size:13px;color:var(--muted)}
+input,select{font-size:16px;padding:12px;border-radius:12px;border:2px solid #eee;width:100%}
+footer{max-width:960px;margin:auto;padding:0 20px 40px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+<div><h1>Hands-On Fitness <span>· prototype</span></h1><div class="status" id="apiStatus">API: checking…</div></div>
+<div class="row"><button class="btn alt" onclick="resetDemo()">Reset demo</button></div>
+</header>
+<nav>
+<button data-tab="today" class="on" onclick="show('today',this)">Today</button>
+<button data-tab="player" onclick="show('player',this)">Session player</button>
+<button data-tab="well" onclick="show('well',this)">Wellness</button>
+<button data-tab="prog" onclick="show('prog',this)">Progress</button>
+<button data-tab="rem" onclick="show('rem',this)">Reminders</button>
+</nav>
+<main>
+<!-- TODAY -->
+<section id="tab-today">
+<div class="card">
+<span class="pill" style="background:#E6F5EF;color:#0E7C6B">PERSONALIZED DAILY PLAN</span>
+<h2 id="todayTitle">Today's mix</h2>
+<div class="tag" id="todayMeta">Loading from local API…</div>
+<div id="sessList" style="display:grid;gap:10px;margin:14px 0"></div>
+<div class="row"><button class="btn go" onclick="startFirst()">Start ▶</button><button class="btn alt" onclick="swapSession()">Swap ↔</button></div>
+</div>
+<div class="card">
+<h2>Onboarding (demo)</h2>
+<div class="tag">Goal → level → time. Stored in this browser only.</div>
+<div class="grid2" style="margin-top:10px" id="goalGrid"></div>
+<div class="row" style="margin-top:12px">
+<select id="levelSel"><option>beginner</option><option>intermediate</option><option>advanced</option></select>
+<select id="timeSel"><option>10</option><option>20</option><option>30</option></select>
+<button class="btn teal" onclick="saveProfile()">Save</button>
+</div>
+</div>
+</section>
+<!-- PLAYER -->
+<section id="tab-player" style="display:none">
+<div class="card">
+<span class="pill" style="background:#1A1D21;color:#fff">GUIDED SESSION · COUNTDOWN</span>
+<h2 id="stepName">Press Start</h2>
+<div class="ring" id="ring"><span id="clock">0:00</span></div>
+<div class="cue" id="cue">—</div>
+<div class="timer tag" id="stepPos">No session loaded</div>
+<div class="row" style="justify-content:center;margin-top:10px">
+<button class="btn alt" id="btnPause" onclick="togglePause()">⏸ Pause</button>
+<button class="btn alt" onclick="skipStep(1)">⏭ Skip</button>
+<button class="btn alt" onclick="skipStep(-1)">↺ Back</button>
+<button class="btn go" onclick="finishSession()">Finish ✓</button>
+</div>
+</div>
+</section>
+<!-- WELLNESS -->
+<section id="tab-well" style="display:none">
+<div class="card"><span class="pill" style="background:#E6F5EF;color:#0E7C6B">HYDRATION</span>
+<h2>Water — <span id="waterTotal">0</span> / 2000 ml</h2>
+<div class="bar"><i id="waterBar" style="width:0%"></i></div>
+<div class="row" style="margin-top:12px"><button class="btn teal" onclick="addWater(250)">+250 ml</button><button class="btn teal" onclick="addWater(500)">+500 ml</button></div></div>
+<div class="card"><span class="pill" style="background:#FFF3D6;color:#8A5A00">WELLNESS TIP</span><h2 id="tipTitle">Post-workout hydration</h2><p id="tipBody">Drink 250–500 ml water within 30 min after your workout.</p><button class="btn alt" onclick="nextTip()">Next tip →</button></div>
+</section>
+<!-- PROGRESS -->
+<section id="tab-prog" style="display:none">
+<div class="card"><span class="pill" style="background:#FFF3D6;color:#8A5A00">STREAKS</span>
+<h2>🔥 <span id="streakN">0</span>-day streak</h2>
+<div class="bar"><i id="streakBar" style="width:0%"></i></div>
+<div class="tag" id="histLine">No sessions completed yet in this demo.</div>
+<div class="row" style="margin-top:12px"><button class="btn alt" onclick="goTab('player')">Do today's session →</button></div></div>
+</section>
+<!-- REMINDERS (Phase 7) -->
+<section id="tab-rem" style="display:none">
+<div class="card"><span class="pill" style="background:#1A1D21;color:#fff">REMINDERS · PHASE 7</span>
+<h2>Consistency loop</h2>
+<div class="tag">Needs a saved user first (Today → Save). Browser notifications demo the mobile push.</div>
+<div class="row" style="margin:12px 0"><button class="btn alt" onclick="askPerm()">Enable browser notifications</button>
+<button class="btn alt" onclick="testNotif()">Send test now 🔔</button></div>
+<div id="remList" style="display:grid;gap:10px"></div>
+<div class="row" style="margin-top:12px">
+<select id="remType"><option value="workout">workout (Must)</option><option value="hydration">hydration (Should)</option><option value="sleep">sleep (Could)</option></select>
+<input id="remTime" type="time" value="07:00" style="max-width:140px">
+<button class="btn go" onclick="saveReminder()">Save ⏰</button>
+</div>
+<div class="tag" style="margin-top:8px">Quiet hours 22:00–06:00 honored server-side. Tap = deep-link: workout→Today, hydration/sleep→Wellness.</div>
+</div>
+</section>
+</main>
+<footer>Web prototype · talks to <b>http://localhost:3000</b> (hof-api + Postgres) with embedded fallback data · demo state in localStorage · Calm Active / Outfit + Manrope</footer>
+<script>
+const API='http://localhost:3000';
+const FALLBACK=[{id:'beginner-fullbody-10',type:'workout',duration_min:10,steps:[
+{name:'March in place',secs:60},{name:'Bodyweight squats',secs:60},{name:'Standing yoga stretch',secs:60}]}];
+const TIPS=[{t:'Post-workout hydration',b:'Drink 250–500 ml water within 30 min after your workout.'},{t:'Skin + foot care',b:'Shower after sweating; dry feet well to avoid fungal issues.'},{t:'Wind down',b:'Dim screens 30 min before bed; aim for 7–9 h sleep.'}];
+let sessions=[],steps=[],si=0,left=0,timer=null,paused=false,tipI=0;
+let store=JSON.parse(localStorage.getItem('hof-demo')||'{"water":0,"streak":0,"done":0,"goal":"strength"}');
+function save(){localStorage.setItem('hof-demo',JSON.stringify(store));paint();}
+function paint(){
+ document.getElementById('waterTotal').textContent=store.water;
+ document.getElementById('waterBar').style.width=Math.min(100,store.water/2000*100)+'%';
+ document.getElementById('streakN').textContent=store.streak;
+ document.getElementById('streakBar').style.width=Math.min(100,store.streak/7*100)+'%';
+ document.getElementById('histLine').textContent=store.done?store.done+' session(s) completed in this demo · streak '+store.streak+' day(s).':'No sessions completed yet in this demo.';
+ document.querySelectorAll('#goalGrid .goal').forEach(g=>g.classList.toggle('on',g.dataset.g===store.goal));
+}
+async function boot(){
+ paintGoals();paint();
+ try{const h=await(await fetch(API+'/health')).json();
+  document.getElementById('apiStatus').innerHTML='API: <b>connected</b> · db '+h.db;
+  const p=await(await fetch(API+'/plan/today')).json();
+  sessions=(p.sessions&&p.sessions.length?p.sessions:FALLBACK).map(s=>({...s,steps:(s.steps||FALLBACK[0].steps)}));
+ }catch(e){document.getElementById('apiStatus').textContent='API unreachable — using embedded demo data';sessions=FALLBACK;}
+ renderToday();
+}
+function paintGoals(){const gs=['strength','flexibility','weight_loss','stress_relief'];
+ document.getElementById('goalGrid').innerHTML=gs.map(g=>`<div class="goal${g===store.goal?' on':''}" data-g="${g}" onclick="store.goal='${g}';save()">${g.replace('_',' ')}</div>`).join('');}
+function saveProfile(){store.level=document.getElementById('levelSel').value;store.time=document.getElementById('timeSel').value;save();alert('Saved: '+store.goal+' · '+store.level+' · '+store.time+' min');}
+function renderToday(){
+ document.getElementById('todayMeta').textContent=new Date().toDateString()+' · '+store.goal+' · '+(store.level||'beginner')+' · '+(store.time||10)+' min';
+ document.getElementById('sessList').innerHTML=sessions.map((s,i)=>`<div class="card" style="margin:0"><b>${i+1}. ${s.id}</b> <span class="pill" style="background:${s.type==='yoga'?'#E6F5EF':'#FFE9E6'};color:${s.type==='yoga'?'#0E7C6B':'#B23A2E'}">${s.type} · ${s.duration_min}′</span></div>`).join('');
+ steps=sessions[0]?sessions[0].steps:[];loadStep(0);
+}
+function swapSession(){if(sessions.length>1){sessions.push(sessions.shift());renderToday();}else alert('Only one demo session — add more seed data to enable swap.');}
+function startFirst(){goTab('player');loadStep(0);startClock();}
+function loadStep(i){si=Math.max(0,Math.min(steps.length-1,i));left=steps[si]?steps[si].secs:0;paused=false;
+ document.getElementById('btnPause').textContent='⏸ Pause';
+ document.getElementById('stepName').textContent=steps[si]?steps[si].name:'Done';
+ draw();}
+function fmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+function draw(){document.getElementById('clock').textContent=fmt(left);
+ const tot=steps[si]?steps[si].secs:1;
+ document.getElementById('ring').style.background=`conic-gradient(var(--coral) ${left/tot*100}%,#eee 0)`;
+ document.getElementById('stepPos').textContent=steps.length?`Step ${si+1} of ${steps.length} · ${steps[si].name}`:'No session loaded';
+ document.getElementById('cue').textContent=left<=3&&left>0?'3 · 2 · 1 · SWITCH':'—';}
+function startClock(){clearInterval(timer);timer=setInterval(()=>{if(paused)return;if(left>0){left--;draw();if(left===0&&si<steps.length-1){loadStep(si+1);}}else{clearInterval(timer);finishSession(true);}},1000);}
+function togglePause(){paused=!paused;document.getElementById('btnPause').textContent=paused?'▶ Resume':'⏸ Pause';}
+function skipStep(d){loadStep(si+d);}
+function finishSession(auto){clearInterval(timer);store.done++;store.streak++;save();
+ document.getElementById('tipBody').textContent=TIPS[0].b;goTab('well');alert(auto?'Session complete — streak +1 🔥':'Session logged — streak +1 🔥');}
+function addWater(ml){store.water+=ml;save();}
+function nextTip(){tipI=(tipI+1)%TIPS.length;document.getElementById('tipTitle').textContent=TIPS[tipI].t;document.getElementById('tipBody').textContent=TIPS[tipI].b;}
+function show(id,btn){['today','player','well','prog','rem'].forEach(t=>document.getElementById('tab-'+t).style.display=t===id?'block':'none');
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b===btn));}
+function goTab(t){show(t,document.querySelector(`nav button[data-tab="${t}"]`));}
+function resetDemo(){localStorage.removeItem('hof-demo');location.reload();}
+let apiUser=null;
+async function saveReminder(){
+ if(!apiUser){const u=await(await fetch(API+'/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal:store.goal||'strength',level:store.level||'beginner',time_budget_min:Number(store.time||10)})})).json();apiUser=u;}
+ const type=document.getElementById('remType').value,time=document.getElementById('remTime').value||'07:00';
+ await fetch(API+'/reminders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:apiUser.id,type,time_local:time})});
+ loadReminders();
+}
+async function loadReminders(){
+ if(!apiUser)return;const r=await(await fetch(API+'/reminders?user_id='+apiUser.id)).json();
+ document.getElementById('remList').innerHTML=r.map(x=>`<div class="card" style="margin:0"><b>${x.type}</b> · ${x.time_local} · ${x.enabled?'ON':'OFF'} <button class="btn alt" onclick="toggleRem(${x.id},${!x.enabled})">${x.enabled?'Mute':'Unmute'}</button></div>`).join('')||'<div class="tag">No reminders yet.</div>';
+}
+async function toggleRem(id,en){await fetch(API+'/reminders/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:en})});loadReminders();}
+function askPerm(){if('Notification' in window)Notification.requestPermission().then(p=>alert('Notifications: '+p));else alert('This browser has no Notification API.');}
+function testNotif(){if('Notification' in window&&Notification.permission==='granted')new Notification('Hands-On Fitness',{body:'Time for your daily practice 💪 → Today plan'});else alert('Enable notifications first.');}
+boot();
+</script>
+</body>
+</html>

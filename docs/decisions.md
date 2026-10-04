@@ -1,7 +1,7 @@
 # Architectural Decisions — Hands-On Fitness (PRD v1.0)
 
 Source: `HANDS ON FITNESS.md` + `IMPLEMENTATION_PLAN.md` Phase 0.
-Status: Proposed — review and lock before Phase 1 to avoid rework.
+Status: Locked 2026-09-27 — D3 = Postgres + Better Auth + R2 (matches PRD technical note).
 
 ## D1 — PRD §8 Open Questions
 
@@ -29,15 +29,15 @@ Rejected: separate native Swift + Kotlin for MVP (2x cost, no PRD benefit).
 
 ## D3 — Backend
 
-**Decision: Firebase — Auth + Firestore + Storage + FCM + Analytics.**
-- Auth: email + Google/Apple social (Phase 1 <90s onboarding)
-- Firestore: `users, sessions, plans, completionLogs, wellnessLogs`
-- Storage + CDN: session videos, stream-only (see D4)
-- FCM + local notifications: daily workout (Must), hydration (Should), wind-down (Could)
+**Decision: Postgres + Better Auth + Cloudflare R2 + Node API (locked 2026-09-27, supersedes Firebase option).**
+- Postgres 16: `users, sessions, steps, plans, completion_logs, wellness_logs, tips` (local via Docker `hof-db`; prod: Neon serverless). SQL fits weekly-mix + streak summaries better than Firestore.
+- Better Auth via Node API (Hono + Drizzle): email + Google/Apple social, session/JWT; Better-Auth tables live alongside app tables, linked by `authUserId`.
+- Cloudflare R2: `hof-videos/{sessionId}/main.mp4`, thumbs, cues — API returns short-lived signed URLs, stream-only v1 (zero egress fees).
+- FCM/APNs + local notifications: daily workout (Must), hydration (Should), wind-down (Could). Push still needed — R2/Auth don't do push.
 
-Video: start Storage + CDN; move to Cloudflare Stream / Mux for adaptive bitrate if buffering hurts the 60% completion metric.
+Video: start R2 + CDN; move to Cloudflare Stream for adaptive bitrate if buffering hurts the 60% completion metric.
 
-Rejected: custom backend for v1 — no live coaching / social / wearables (§7 out of scope), `PlanEngine` runs client-side.
+Superseded: Firebase (Auth/Firestore/Storage) — was faster for MVP but rejected for control + video egress costs. `PlanEngine` still runs client-side; API stays thin (auth, CRUD, signed URLs, reminders).
 
 ## D4 — Data model
 
