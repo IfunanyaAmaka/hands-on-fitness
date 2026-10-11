@@ -17,6 +17,7 @@ const pool = new pg.Pool({
 const GOALS = ["weight_loss", "strength", "flexibility", "stress_relief"];
 const LEVELS = ["beginner", "intermediate", "advanced"];
 const TIMES = [10, 20, 30];
+const aiTipUsed = {}; // user_id:date → true (daily AI cap; move to DB table in prod)
 
 const send = (res, code, obj) => {
   res.writeHead(code, { "Content-Type": "application/json" });
@@ -250,6 +251,54 @@ const server = http.createServer(async (req, res) => {
       // Deep-link target per type: workout→today plan, hydration/sleep→wellness.
       const target = r.rows[0].type === "workout" ? "today" : "well";
       return send(res, 200, { ok: true, deep_link: target });
+    }
+
+    // ---- AI: personal tip via Groq (free tier), DB fallback ----
+    // POST /ai/tip {user_id} → {tip, source: ai|fallback}. Max 1 AI call/user/day (in-memory; use a table in prod).
+    // Model from GROQ_MODEL (default openai/gpt-oss-20b — Groq retired llama-3.3-70b-versatile on 08/16/26).
+    if (path === "/ai/tip" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!b || !b.user_id) return send(res, 400, { error: "need user_id" });
+      const u = await pool.query(`SELECT * FROM users WHERE id=$1`, [b.user_id]);
+      if (!u.rows.length) return send(res, 404, { error: "user not found" });
+      const p = u.rows[0];
+      const today = new Date().toISOString().slice(0, 10);
+      const fallback = async () => {
+        const t = await pool.query(`SELECT body FROM tips ORDER BY id LIMIT 1`);
+        return send(res, 200, { tip: t.rows[0]?.body || "Drink water and rest well today.", source: "fallback" });
+      };
+      if (!process.env.GROQ_API_KEY) return fallback();
+      if (aiTipUsed[`${b.user_id}:${today}`]) return fallback();
+      try {
+        const recent = await pool.query(
+          `SELECT COUNT(*)::int AS n FROM completion_logs WHERE user_id=$1 AND started_at > now() - interval '7 days'`, [b.user_id]
+        );
+        const prompt = `You are a friendly fitness-app wellness coach. General wellness info only, never medical diagnoses. Write ONE short wellness tip (max 60 words, plain language, beginner-friendly) for a fitness app user. Profile: goal=${p.goal}, level=${p.level}, daily time=${p.time_budget_min} min, sessions last 7 days=${recent.rows[0].n}. Topic: hydration, rest, nutrition, or hygiene — pick what fits best. No preamble, just the tip.`;
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 15000);
+        const g = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+          body: JSON.stringify({
+            model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7,
+            max_tokens: 300,
+          }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
+        if (!g.ok) throw new Error("groq " + g.status);
+        const j = await g.json();
+        const tip = j.choices?.[0]?.message?.content?.trim();
+        if (!tip) throw new Error("empty");
+        aiTipUsed[`${b.user_id}:${today}`] = true;
+        console.log("analytics: ai_tip_generated", b.user_id);
+        return send(res, 200, { tip, source: "ai" });
+      } catch (e) {
+        console.error("ai tip fallback:", String(e.message || e));
+        return fallback();
+      }
     }
 
     return send(res, 404, { error: "not found" });
