@@ -18,6 +18,54 @@ const GOALS = ["weight_loss", "strength", "flexibility", "stress_relief"];
 const LEVELS = ["beginner", "intermediate", "advanced"];
 const TIMES = [10, 20, 30];
 const aiTipUsed = {}; // user_id:date → true (daily AI cap; move to DB table in prod)
+let spotifyToken = null, spotifyTokenExp = 0; // client-credentials token cache (1h life)
+
+// ---- Payments via Paystack (test mode free; live takes % per transaction). ----
+// Setup: paystack.com → Settings → API Keys → TEST secret/public keys.
+// Amounts are in KOBO (250000 = ₦2,500). Never trust the browser: the server
+// verifies every reference with Paystack before marking success.
+const PLANS = { premium_monthly: { amount_kobo: 250000, currency: "NGN" } };
+const payConfigured = () => Boolean(process.env.PAYSTACK_SECRET_KEY);
+async function paystackVerify(reference) {
+  const r = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+  });
+  const j = await r.json();
+  if (!r.ok || !j.status) throw new Error("paystack verify failed: " + JSON.stringify(j).slice(0, 200));
+  return j.data;
+}
+
+// ---- Email via ZeptoMail (transactional only: welcome, reminders). ----
+// Setup: verify a sending domain in ZeptoMail → create a Mail Agent → copy its
+// Send Mail Token → ZEPTOMAIL_API_KEY. From-address must use that domain.
+// EU accounts: ZEPTOMAIL_BASE=https://api.zeptomail.eu/v1.1/email
+const zeptoConfigured = () => Boolean(process.env.ZEPTOMAIL_API_KEY && process.env.ZEPTOMAIL_FROM);
+async function zeptoSend(to, subject, htmlbody) {
+  const base = process.env.ZEPTOMAIL_BASE || "https://api.zeptomail.com/v1.1/email";
+  const r = await fetch(base, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Zoho-enczapikey ${process.env.ZEPTOMAIL_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: { address: process.env.ZEPTOMAIL_FROM, name: process.env.ZEPTOMAIL_FROM_NAME || "Hands-On Fitness" },
+      to: [{ email_address: { address: to } }],
+      subject,
+      htmlbody,
+    }),
+  });
+  if (!r.ok) throw new Error("zeptomail " + r.status + ": " + (await r.text()).slice(0, 200));
+  return r.json();
+}
+async function sendWelcomeEmail(to, profile) {
+  if (!zeptoConfigured()) return { sent: false, reason: "email not configured" };
+  const html = `<div style="font-family:sans-serif"><h2>Welcome to Hands-On Fitness 💪</h2><p>Your plan: <b>${profile.goal.replace("_", " ")}</b> · ${profile.level} · ${profile.time_budget_min} min/day.</p><p>Open the app to see today's mix of workout + yoga. Small steps daily beat rare big ones!</p></div>`;
+  const out = await zeptoSend(to, "Welcome to Hands-On Fitness 💪", html);
+  console.log("analytics: welcome_email_sent", to);
+  return { sent: true, out };
+}
 
 const send = (res, code, obj) => {
   res.writeHead(code, { "Content-Type": "application/json" });
@@ -63,11 +111,14 @@ const server = http.createServer(async (req, res) => {
           error: "invalid profile",
           expect: { goal: GOALS, level: LEVELS, time_budget_min: TIMES },
         });
+      const email = typeof b.email === "string" && b.email.includes("@") ? b.email.trim() : null;
       const { rows } = await pool.query(
-        `INSERT INTO users (goal, level, time_budget_min) VALUES ($1,$2,$3) RETURNING *`,
-        [b.goal, b.level, Number(b.time_budget_min)]
+        `INSERT INTO users (goal, level, time_budget_min, email) VALUES ($1,$2,$3,$4) RETURNING *`,
+        [b.goal, b.level, Number(b.time_budget_min), email]
       );
       console.log("analytics: onboarding_completed", rows[0].id);
+      // Welcome email via ZeptoMail — fire-and-forget, never fails signup.
+      if (email) sendWelcomeEmail(email, rows[0]).catch((e) => console.error("welcome email:", String(e.message || e)));
       return send(res, 201, rows[0]);
     }
     let m = path.match(/^\/users\/([0-9a-f-]{36})$/);
@@ -298,6 +349,237 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         console.error("ai tip fallback:", String(e.message || e));
         return fallback();
+      }
+    }
+
+    // ---- Email test (ZeptoMail). POST /email/test {to} ----
+    if (path === "/email/test" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!b || !b.to || !String(b.to).includes("@")) return send(res, 400, { error: "need to (valid email)" });
+      if (!zeptoConfigured()) return send(res, 200, { sent: false, reason: "email not configured — set ZEPTOMAIL_API_KEY + ZEPTOMAIL_FROM" });
+      try {
+        const out = await zeptoSend(String(b.to).trim(), "Hands-On Fitness test email ✅",
+          `<div style="font-family:sans-serif"><h2>It works! 🎉</h2><p>Your Hands-On Fitness app can send email via ZeptoMail.</p></div>`);
+        return send(res, 200, { sent: true, out });
+      } catch (e) {
+        return send(res, 502, { sent: false, error: String(e.message || e) });
+      }
+    }
+
+    // ---- Payments: init / verify / webhook (Paystack) ----
+    // POST /payments/init {user_id, plan} → {reference, amount_kobo, currency, public_key}
+    // The app charges with Paystack Inline JS, then calls /payments/verify/:reference.
+    if (path === "/payments/init" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!b || !b.user_id || !PLANS[b.plan || "premium_monthly"])
+        return send(res, 400, { error: "need user_id + plan(premium_monthly)" });
+      const plan = b.plan || "premium_monthly";
+      const reference = `hof-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await pool.query(
+        `INSERT INTO payments (user_id, reference, plan, amount_kobo, currency) VALUES ($1,$2,$3,$4,$5)`,
+        [b.user_id, reference, plan, PLANS[plan].amount_kobo, PLANS[plan].currency]
+      );
+      return send(res, 201, {
+        reference, plan, amount_kobo: PLANS[plan].amount_kobo, currency: PLANS[plan].currency,
+        public_key: process.env.PAYSTACK_PUBLIC_KEY || null,
+        test_mode: !process.env.PAYSTACK_PUBLIC_KEY || String(process.env.PAYSTACK_PUBLIC_KEY).startsWith("pk_test"),
+      });
+    }
+    m = path.match(/^\/payments\/verify\/([A-Za-z0-9-]+)$/);
+    if (m && req.method === "GET") {
+      if (!payConfigured()) return send(res, 200, { status: "pending", reason: "payments not configured — set PAYSTACK_SECRET_KEY" });
+      const row = await pool.query(`SELECT * FROM payments WHERE reference=$1`, [m[1]]);
+      if (!row.rows.length) return send(res, 404, { error: "unknown reference" });
+      try {
+        const v = await paystackVerify(m[1]);
+        const ok = v.status === "success" && v.amount === row.rows[0].amount_kobo;
+        await pool.query(`UPDATE payments SET status=$1 WHERE reference=$2`, [ok ? "success" : "failed", m[1]]);
+        if (ok) console.log("analytics: payment_success", row.rows[0].user_id, m[1]);
+        return send(res, 200, { status: ok ? "success" : "failed", amount_kobo: v.amount, currency: v.currency });
+      } catch (e) {
+        return send(res, 502, { status: "pending", error: String(e.message || e) });
+      }
+    }
+    // Webhook: Settings → Webhooks → http(s)://your-api/payments/webhook (events: charge.success).
+    // Signature checked on the RAW body with HMAC-SHA512 (crypto is Node built-in, no new deps).
+    if (path === "/payments/webhook" && req.method === "POST") {
+      const raw = await new Promise((resolve) => { let s = ""; req.on("data", (c) => (s += c)); req.on("end", () => resolve(s)); });
+      if (!payConfigured()) return send(res, 200, { ok: false, reason: "payments not configured" });
+      const { createHmac, timingSafeEqual } = await import("node:crypto");
+      const sig = req.headers["x-paystack-signature"] || "";
+      const expect = createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(raw).digest("hex");
+      const match = sig.length === expect.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expect));
+      if (!match) return send(res, 401, { error: "bad signature" });
+      let ev = null;
+      try { ev = JSON.parse(raw); } catch { return send(res, 400, { error: "bad json" }); }
+      if (ev.event === "charge.success") {
+        await pool.query(`UPDATE payments SET status='success' WHERE reference=$1`, [ev.data?.reference]);
+        console.log("analytics: payment_success_webhook", ev.data?.reference);
+      }
+      return send(res, 200, { ok: true });
+    }
+
+    // ---- Music via Spotify Web API (free). ----
+    // Setup: developer.spotify.com → Dashboard → Create app → Client ID + Secret → SPOTIFY_CLIENT_ID/SECRET.
+    // Uses Client Credentials flow (app-only: search/browse public playlists+tracks, no user login needed).
+    // Full in-app playback needs user Premium + Playback SDK — v1 opens Spotify links/embeds instead.
+    // GET /music/search?q=workout&type=playlist&limit=5 ; GET /music/playlist/:id
+    const musicConfigured = () => Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+    const spotifyAuth = async () => {
+      if (spotifyToken && Date.now() < spotifyTokenExp) return spotifyToken;
+      const basic = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString("base64");
+      const r = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basic}` },
+        body: "grant_type=client_credentials",
+      });
+      if (!r.ok) throw new Error("spotify auth " + r.status);
+      const j = await r.json();
+      spotifyToken = j.access_token;
+      spotifyTokenExp = Date.now() + (j.expires_in - 60) * 1000;
+      return spotifyToken;
+    };
+    const spotifyGet = async (path) => {
+      const t = await spotifyAuth();
+      const r = await fetch(`https://api.spotify.com/v1${path}`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!r.ok) throw new Error("spotify " + r.status);
+      return r.json();
+    };
+    if (path === "/music/search" && req.method === "GET") {
+      if (!musicConfigured()) return send(res, 200, { ok: false, reason: "music not configured — set SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET", items: [] });
+      try {
+        const q = url.searchParams.get("q") || "workout";
+        const type = url.searchParams.get("type") || "playlist";
+        const limit = Math.min(10, Number(url.searchParams.get("limit")) || 5);
+        const j = await spotifyGet(`/search?q=${encodeURIComponent(q)}&type=${type}&limit=${limit}`);
+        const items = (j.playlists?.items || j.tracks?.items || []).filter(Boolean).map((x) => ({
+          id: x.id, name: x.name, url: x.external_urls?.spotify || null,
+          image: x.images?.[0]?.url || x.album?.images?.[0]?.url || null,
+          owner: x.owner?.display_name || x.artists?.map((a) => a.name).join(", ") || null,
+          tracks_total: x.tracks?.total ?? null,
+        }));
+        return send(res, 200, { ok: true, items });
+      } catch (e) {
+        return send(res, 502, { ok: false, error: String(e.message || e), items: [] });
+      }
+    }
+    m = path.match(/^\/music\/playlist\/([A-Za-z0-9]+)$/);
+    if (m && req.method === "GET") {
+      if (!musicConfigured()) return send(res, 200, { ok: false, reason: "music not configured", tracks: [] });
+      try {
+        const j = await spotifyGet(`/playlists/${m[1]}?fields=name,external_urls,tracks.items(track(name,artists(name),duration_ms,external_urls))&limit=20`);
+        const tracks = (j.tracks?.items || []).filter((x) => x.track).map((x) => ({
+          name: x.track.name, artists: x.track.artists.map((a) => a.name).join(", "),
+          duration_ms: x.track.duration_ms, url: x.track.external_urls?.spotify || null,
+        }));
+        return send(res, 200, { ok: true, name: j.name, url: j.external_urls?.spotify, tracks });
+      } catch (e) {
+        return send(res, 502, { ok: false, error: String(e.message || e), tracks: [] });
+      }
+    }
+
+    // ---- Calendar via Google Calendar API (free). ----
+    // Setup: Google Cloud project → enable Calendar API → OAuth consent (External, add your Gmail as test user)
+    // → Credentials → OAuth client (Web) → redirect http://localhost:3000/auth/google/callback
+    // → GOOGLE_CLIENT_ID/SECRET. Scope is calendar.events only (create events, nothing else).
+    // Flow: GET /calendar/auth-url?user_id= → open URL → Google → /auth/google/callback → stored.
+    // Then POST /calendar/schedule {user_id, session_id, date, time_local} creates the workout event.
+    const calConfigured = () => Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    const calRedirect = () => process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/auth/google/callback";
+    const googleToken = async (params) => {
+      const r = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params).toString(),
+      });
+      if (!r.ok) throw new Error("google oauth " + r.status + ": " + (await r.text()).slice(0, 200));
+      return r.json();
+    };
+    if (path === "/calendar/auth-url" && req.method === "GET") {
+      const userId = url.searchParams.get("user_id");
+      if (!userId) return send(res, 400, { error: "need user_id" });
+      if (!calConfigured()) return send(res, 200, { ok: false, reason: "calendar not configured — set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET", url: null });
+      const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      u.search = new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID, redirect_uri: calRedirect(),
+        response_type: "code", scope: "https://www.googleapis.com/auth/calendar.events",
+        access_type: "offline", prompt: "consent", state: userId,
+      }).toString();
+      return send(res, 200, { ok: true, url: u.toString() });
+    }
+    if (path === "/auth/google/callback" && req.method === "GET") {
+      const code = url.searchParams.get("code"), userId = url.searchParams.get("state");
+      if (!code || !userId) { res.writeHead(400, { "Content-Type": "text/html" }); return res.end("<h2>Missing code — try connecting again.</h2>"); }
+      try {
+        const t = await googleToken({ code, client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET, redirect_uri: calRedirect(), grant_type: "authorization_code" });
+        await pool.query(
+          `INSERT INTO calendar_tokens (user_id, refresh_token) VALUES ($1,$2)
+           ON CONFLICT (user_id) DO UPDATE SET refresh_token=EXCLUDED.refresh_token, updated_at=now()`,
+          [userId, t.refresh_token || ""]
+        );
+        console.log("analytics: calendar_connected", userId);
+        res.writeHead(200, { "Content-Type": "text/html" });
+        return res.end("<h2>Calendar connected ✅</h2><p>Go back to Hands-On Fitness and schedule today's session.</p>");
+      } catch (e) {
+        res.writeHead(502, { "Content-Type": "text/html" });
+        return res.end("<h2>Could not connect calendar.</h2><p>" + String(e.message || e) + "</p>");
+      }
+    }
+    if (path === "/calendar/schedule" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!b || !b.user_id || !b.session_id) return send(res, 400, { error: "need user_id + session_id (+ date, time_local)" });
+      if (!calConfigured()) return send(res, 200, { ok: false, reason: "calendar not configured", event: null });
+      const tok = await pool.query(`SELECT refresh_token FROM calendar_tokens WHERE user_id=$1`, [b.user_id]);
+      if (!tok.rows.length || !tok.rows[0].refresh_token)
+        return send(res, 200, { ok: false, reason: "calendar not connected — open the connect link first", event: null });
+      try {
+        const s = await pool.query(`SELECT * FROM sessions WHERE id=$1`, [b.session_id]);
+        const mins = s.rows[0]?.duration_min || 10;
+        const date = b.date || new Date().toISOString().slice(0, 10);
+        const time = b.time_local || "07:00";
+        const at = await googleToken({ client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET, refresh_token: tok.rows[0].refresh_token, grant_type: "refresh_token" });
+        const start = new Date(`${date}T${time}:00`);
+        const end = new Date(start.getTime() + mins * 60000);
+        const ev = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${at.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            summary: `💪 Hands-On Fitness: ${b.session_id}`,
+            description: "Your guided workout + yoga session. Open the app to start the timer!",
+            start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() },
+            reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
+          }),
+        });
+        if (!ev.ok) throw new Error("calendar insert " + ev.status);
+        const j = await ev.json();
+        console.log("analytics: calendar_event_created", b.user_id);
+        return send(res, 201, { ok: true, event: { id: j.id, link: j.htmlLink } });
+      } catch (e) {
+        return send(res, 502, { ok: false, error: String(e.message || e), event: null });
+      }
+    }
+
+    // ---- Live video rooms via self-hosted LiveKit (post-v1; PRD §7 lists live coaching out of scope). ----
+    // POST /live/token {identity, room} → {token, url}. Browser joins with livekit-client.
+    // Local dev keys (devkey/secret) match livekit.yaml; override via .env for prod.
+    if (path === "/live/token" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!b || !b.identity || !b.room) return send(res, 400, { error: "need identity + room" });
+      try {
+        const { AccessToken } = await import("livekit-server-sdk");
+        const at = new AccessToken(
+          process.env.LIVEKIT_API_KEY || "devkey",
+          process.env.LIVEKIT_API_SECRET || "secretdontsharelocalonly",
+          { identity: String(b.identity).slice(0, 64), ttl: "2h" }
+        );
+        at.addGrant({ roomJoin: true, room: String(b.room).slice(0, 64), canPublish: true, canSubscribe: true });
+        return send(res, 200, {
+          token: await at.toJwt(),
+          url: process.env.LIVEKIT_URL || "http://localhost:7880",
+        });
+      } catch (e) {
+        return send(res, 502, { error: String(e.message || e) });
       }
     }
 

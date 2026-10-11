@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hands-On Fitness — Web Prototype</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"></script>
 <style>
 :root{--bg:#FAF7F2;--ink:#1A1D21;--muted:#6B7280;--coral:#FF6B5B;--teal:#0E7C6B;--amber:#FFB020;--card:#fff}
 *{box-sizing:border-box;font-family:Manrope,Segoe UI,Arial,sans-serif}
@@ -48,6 +50,7 @@ footer{max-width:960px;margin:auto;padding:0 20px 40px;color:var(--muted);font-s
 <button data-tab="well" onclick="show('well',this)">Wellness</button>
 <button data-tab="prog" onclick="show('prog',this)">Progress</button>
 <button data-tab="rem" onclick="show('rem',this)">Reminders</button>
+<button data-tab="live" onclick="show('live',this)">Live Room</button>
 </nav>
 <main>
 <!-- TODAY -->
@@ -58,6 +61,12 @@ footer{max-width:960px;margin:auto;padding:0 20px 40px;color:var(--muted);font-s
 <div class="tag" id="todayMeta">Loading from local API…</div>
 <div id="sessList" style="display:grid;gap:10px;margin:14px 0"></div>
 <div class="row"><button class="btn go" onclick="startFirst()">Start ▶</button><button class="btn alt" onclick="swapSession()">Swap ↔</button></div>
+</div>
+<div class="card"><span class="pill" style="background:#4285F4;color:#fff">CALENDAR · GOOGLE</span>
+<h2>Put it on your calendar 📅</h2>
+<div class="tag">Free. One connect, then one tap schedules today's session with a 30-min reminder.</div>
+<div class="row" style="margin-top:12px"><button class="btn alt" onclick="calConnect()">1 · Connect Google</button><button class="btn go" onclick="calSchedule()">2 · Schedule today ➕</button></div>
+<div class="tag" id="calTag" style="margin-top:8px"></div>
 </div>
 <div class="card">
 <h2>Onboarding (demo)</h2>
@@ -85,6 +94,12 @@ footer{max-width:960px;margin:auto;padding:0 20px 40px;color:var(--muted);font-s
 <button class="btn go" onclick="finishSession()">Finish ✓</button>
 </div>
 </div>
+<div class="card"><span class="pill" style="background:#1DB954;color:#fff">WORKOUT DJ · SPOTIFY</span>
+<h2>Train to music 🎧</h2>
+<div class="row"><input id="musicQ" placeholder="workout, yoga, afrobeat…" style="max-width:220px" value="workout"><button class="btn alt" onclick="searchMusic()">Search 🔍</button></div>
+<div id="musicList" style="display:grid;gap:10px;margin-top:12px"><div class="tag">Playlists appear here. Playback opens in Spotify (free).</div></div>
+<div id="musicEmbed" style="margin-top:12px"></div>
+</div>
 </section>
 <!-- WELLNESS -->
 <section id="tab-well" style="display:none">
@@ -101,6 +116,12 @@ footer{max-width:960px;margin:auto;padding:0 20px 40px;color:var(--muted);font-s
 <div class="bar"><i id="streakBar" style="width:0%"></i></div>
 <div class="tag" id="histLine">No sessions completed yet in this demo.</div>
 <div class="row" style="margin-top:12px"><button class="btn alt" onclick="goTab('player')">Do today's session →</button></div></div>
+<div class="card"><span class="pill" style="background:#1A1D21;color:#fff">PREMIUM · PAYSTACK</span>
+<h2>Go Premium — ₦2,500/mo</h2>
+<div class="tag">Test mode: no real money. Card <b>4084 0840 8408 4081</b>, any future date + CVV.</div>
+<div class="row" style="margin-top:12px"><button class="btn go" onclick="payPremium()">Pay with Paystack 💳</button></div>
+<div class="tag" id="payTag" style="margin-top:8px"></div>
+</div>
 </section>
 <!-- REMINDERS (Phase 7) -->
 <section id="tab-rem" style="display:none">
@@ -116,6 +137,23 @@ footer{max-width:960px;margin:auto;padding:0 20px 40px;color:var(--muted);font-s
 <button class="btn go" onclick="saveReminder()">Save ⏰</button>
 </div>
 <div class="tag" style="margin-top:8px">Quiet hours 22:00–06:00 honored server-side. Tap = deep-link: workout→Today, hydration/sleep→Wellness.</div>
+</div>
+<div class="card"><span class="pill" style="background:#E6F5EF;color:#0E7C6B">EMAIL · ZEPTOMAIL</span>
+<h2>Test email</h2>
+<div class="tag">Needs ZeptoMail key + verified domain (see guide). Signup emails send automatically when an address is saved.</div>
+<div class="row" style="margin-top:12px"><input id="emailTo" type="email" placeholder="you@example.com" style="max-width:240px"><button class="btn teal" onclick="sendTestEmail()">Send ✉️</button></div>
+<div class="tag" id="emailTag" style="margin-top:8px"></div>
+</div>
+</section>
+<!-- LIVE ROOM (self-hosted LiveKit; needs camera/mic permission) -->
+<section id="tab-live" style="display:none">
+<div class="card"><span class="pill" style="background:#7C3AED;color:#fff">LIVE ROOM · SELF-HOSTED</span>
+<h2>Live class 🎥</h2>
+<div class="tag">Two tabs, same room name = live call. Camera stays on your machine + your server.</div>
+<div class="row" style="margin-top:12px"><input id="liveRoom" value="morning-class" style="max-width:160px"><input id="liveName" value="coach" style="max-width:140px"></div>
+<div class="row" style="margin-top:12px"><button class="btn go" onclick="liveJoin()">Join ▶</button><button class="btn alt" onclick="liveLeave()">Leave</button></div>
+<div class="tag" id="liveTag" style="margin-top:8px"></div>
+<div class="grid2" style="margin-top:12px"><div><div class="tag">YOU</div><video id="liveLocal" autoplay muted playsinline style="width:100%;border-radius:16px;background:#111"></video></div><div><div class="tag">OTHERS</div><div id="liveRemote" style="display:grid;gap:8px"></div></div></div>
 </div>
 </section>
 </main>
@@ -172,7 +210,7 @@ function finishSession(auto){clearInterval(timer);store.done++;store.streak++;sa
  document.getElementById('tipBody').textContent=TIPS[0].b;goTab('well');alert(auto?'Session complete — streak +1 🔥':'Session logged — streak +1 🔥');}
 function addWater(ml){store.water+=ml;save();}
 function nextTip(){tipI=(tipI+1)%TIPS.length;document.getElementById('tipTitle').textContent=TIPS[tipI].t;document.getElementById('tipBody').textContent=TIPS[tipI].b;}
-function show(id,btn){['today','player','well','prog','rem'].forEach(t=>document.getElementById('tab-'+t).style.display=t===id?'block':'none');
+function show(id,btn){['today','player','well','prog','rem','live'].forEach(t=>document.getElementById('tab-'+t).style.display=t===id?'block':'none');
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b===btn));}
 function goTab(t){show(t,document.querySelector(`nav button[data-tab="${t}"]`));}
 function resetDemo(){localStorage.removeItem('hof-demo');location.reload();}
@@ -190,6 +228,68 @@ async function loadReminders(){
 async function toggleRem(id,en){await fetch(API+'/reminders/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:en})});loadReminders();}
 function askPerm(){if('Notification' in window)Notification.requestPermission().then(p=>alert('Notifications: '+p));else alert('This browser has no Notification API.');}
 function testNotif(){if('Notification' in window&&Notification.permission==='granted')new Notification('Hands-On Fitness',{body:'Time for your daily practice 💪 → Today plan'});else alert('Enable notifications first.');}
+async function sendTestEmail(){
+ const to=document.getElementById('emailTo').value;
+ document.getElementById('emailTag').textContent='Sending…';
+ try{const r=await(await fetch(API+'/email/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to})})).json();
+ document.getElementById('emailTag').textContent=r.sent?'Sent! Check the inbox ✅':'Not sent: '+(r.reason||r.error);}catch(e){document.getElementById('emailTag').textContent='Could not reach the API.';}
+}
+async function calConnect(){
+ try{
+  if(!apiUser){const u=await(await fetch(API+'/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal:store.goal||'strength',level:store.level||'beginner',time_budget_min:Number(store.time||10)})})).json();apiUser=u;}
+  const r=await(await fetch(API+'/calendar/auth-url?user_id='+apiUser.id)).json();
+  if(!r.url){document.getElementById('calTag').textContent='Calendar not connected yet — add Google keys (see guide).';return;}
+  window.open(r.url,'_blank');
+  document.getElementById('calTag').textContent='Approve Google access, then tap Schedule today.';
+ }catch(e){document.getElementById('calTag').textContent='Could not reach the API.';}
+}
+async function calSchedule(){
+ try{
+  if(!apiUser||!sessions[0]){document.getElementById('calTag').textContent='Load your plan first.';return;}
+  const r=await(await fetch(API+'/calendar/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:apiUser.id,session_id:sessions[0].id,time_local:'07:00'})})).json();
+  document.getElementById('calTag').innerHTML=r.ok?`Scheduled! <a href="${r.event.link}" target="_blank" rel="noopener">View event ↗</a>`:'Not scheduled: '+(r.reason||r.error);
+ }catch(e){document.getElementById('calTag').textContent='Could not reach the API.';}
+}
+let liveRoom=null;
+async function liveJoin(){
+ const tag=document.getElementById('liveTag');tag.textContent='Connecting…';
+ try{
+  const room=document.getElementById('liveRoom').value||'morning-class';
+  const name=document.getElementById('liveName').value||'guest';
+  const t=await(await fetch(API+'/live/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identity:name,room})})).json();
+  if(!t.token){tag.textContent='No token: '+(t.error||'unknown');return;}
+  liveRoom=new LivekitClient.Room();
+  liveRoom.on(LivekitClient.RoomEvent.TrackSubscribed,(track)=>{const el=track.attach();el.style.width='100%';el.style.borderRadius='16px';document.getElementById('liveRemote').appendChild(el);});
+  await liveRoom.connect(t.url,t.token);
+  await liveRoom.localParticipant.enableCameraAndMicrophone();
+  const v=document.getElementById('liveLocal');v.muted=true;
+  liveRoom.localParticipant.videoTrackPublications.forEach(p=>{if(p.videoTrack){p.videoTrack.attach(v);}});
+  tag.textContent='Live in "'+room+'" as '+name+' ✅ (open a 2nd tab to see yourself join)';
+ }catch(e){tag.textContent='Join failed: '+e.message+' (camera blocked or server down?)';}
+}
+async function liveLeave(){if(liveRoom){await liveRoom.disconnect();liveRoom=null;}document.getElementById('liveRemote').innerHTML='';document.getElementById('liveTag').textContent='Left.';}
+async function searchMusic(){ const q=document.getElementById('musicQ').value||'workout';
+ const box=document.getElementById('musicList');box.innerHTML='<div class="tag">Searching…</div>';
+ try{const r=await(await fetch(API+'/music/search?q='+encodeURIComponent(q)+'&type=playlist&limit=5')).json();
+ if(!r.ok){box.innerHTML='<div class="tag">Music not connected yet — add Spotify keys (see guide).</div>';return;}
+ box.innerHTML=r.items.map(p=>`<div class="card" style="margin:0"><b>${p.name}</b> <span class="tag">by ${p.owner||'?'} · ${p.tracks_total??'?'} tracks</span><div class="row" style="margin-top:8px"><button class="btn alt" onclick="playList('${p.id}')">Preview ▶</button><a href="${p.url}" target="_blank" rel="noopener"><button class="btn alt">Spotify ↗</button></a></div></div>`).join('')||'<div class="tag">No playlists found.</div>';
+ }catch(e){box.innerHTML='<div class="tag">Could not reach the API.</div>';}
+}
+function playList(id){document.getElementById('musicEmbed').innerHTML=`<iframe style="border-radius:12px" src="https://open.spotify.com/embed/playlist/${id}" width="100%" height="352" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;}
+async function payPremium(){ const tag=document.getElementById('payTag');tag.textContent='Preparing…';
+ try{
+  if(!apiUser){const u=await(await fetch(API+'/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal:store.goal||'strength',level:store.level||'beginner',time_budget_min:Number(store.time||10)})})).json();apiUser=u;}
+  const init=await(await fetch(API+'/payments/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:apiUser.id,plan:'premium_monthly'})})).json();
+  if(!init.public_key){tag.textContent='Add your Paystack TEST public key first (see guide).';return;}
+  const email=prompt('Receipt email:',store.email||'')||'';
+  if(!email.includes('@')){tag.textContent='Need a valid email for the receipt.';return;}
+  PaystackPop.setup({key:init.public_key,email,amount:init.amount_kobo,ref:init.reference,currency:init.currency,
+   callback:async function(r){tag.textContent='Verifying…';
+    const v=await(await fetch(API+'/payments/verify/'+r.reference)).json();
+    tag.textContent=v.status==='success'?'Premium active! 🎉':'Payment '+v.status+'.';},
+   onClose:function(){tag.textContent='Window closed — no charge made.';}}).openIframe();
+ }catch(e){tag.textContent='Could not reach the API.';}
+}
 async function aiTip(){
  document.getElementById('aiTag').textContent='Thinking…';
  try{
